@@ -14,6 +14,7 @@ import { buildDefaultAnswerPrompt } from "../../prompts/defaults"
 import { buildContextString } from "../../types/prompts"
 import { ConcurrentExecutor } from "../concurrent"
 import { resolveConcurrency } from "../../types/concurrency"
+import { countTokens } from "../../utils/tokens"
 
 type LanguageModel =
   | ReturnType<typeof createOpenAI>
@@ -118,7 +119,15 @@ export async function runAnswerPhase(
         const context: unknown[] = searchData.results || []
         const questionDate = checkpoint.questions[question.questionId]?.questionDate
 
+        // Build prompts to count tokens separately
+        const basePrompt = buildAnswerPrompt(question.question, [], questionDate, provider)
+        const contextStr = buildContextString(context)
         const prompt = buildAnswerPrompt(question.question, context, questionDate, provider)
+
+        // Count tokens separately for better analytics
+        const basePromptTokens = countTokens(basePrompt, modelConfig)
+        const contextTokens = countTokens(contextStr, modelConfig)
+        const promptTokens = countTokens(prompt, modelConfig)
 
         const params: Record<string, unknown> = {
           model: client(modelConfig.id),
@@ -136,11 +145,18 @@ export async function runAnswerPhase(
         checkpointManager.updatePhase(checkpoint, question.questionId, "answer", {
           status: "completed",
           hypothesis: text.trim(),
+          promptTokens,
+          basePromptTokens,
+          contextTokens,
           completedAt: new Date().toISOString(),
           durationMs,
         })
 
-        logger.progress(index + 1, total, `Answered ${question.questionId} (${durationMs}ms)`)
+        logger.progress(
+          index + 1,
+          total,
+          `Answered ${question.questionId} (${durationMs}ms, ${promptTokens} tokens: ${basePromptTokens} base + ${contextTokens} context)`
+        )
         return { questionId: question.questionId, durationMs }
       } catch (e) {
         const error = e instanceof Error ? e.message : String(e)

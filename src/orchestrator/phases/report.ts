@@ -9,6 +9,7 @@ import type {
   QuestionTypeStats,
   RetrievalMetrics,
   RetrievalAggregates,
+  TokenMetrics,
 } from "../../types/unified"
 import { logger } from "../../utils/logger"
 
@@ -185,6 +186,43 @@ export function generateReport(benchmark: Benchmark, checkpoint: RunCheckpoint):
 
   const overallRetrieval = aggregateRetrievalMetrics(allRetrievalMetrics)
 
+  // Aggregate token metrics
+  let tokenMetrics: TokenMetrics | undefined
+  const allPromptTokens: number[] = []
+  const allBasePromptTokens: number[] = []
+  const allContextTokens: number[] = []
+
+  for (const question of questions) {
+    const qCheckpoint = checkpoint.questions[question.questionId]
+    if (!qCheckpoint) continue
+
+    const answerPhase = qCheckpoint.phases.answer
+    if (answerPhase.status === "completed") {
+      if (answerPhase.promptTokens) allPromptTokens.push(answerPhase.promptTokens)
+      if (answerPhase.basePromptTokens) allBasePromptTokens.push(answerPhase.basePromptTokens)
+      if (answerPhase.contextTokens) allContextTokens.push(answerPhase.contextTokens)
+    }
+  }
+
+  if (allPromptTokens.length > 0) {
+    const totalTokens = allPromptTokens.reduce((a, b) => a + b, 0)
+    const totalBasePromptTokens = allBasePromptTokens.reduce((a, b) => a + b, 0)
+    const totalContextTokens = allContextTokens.reduce((a, b) => a + b, 0)
+
+    tokenMetrics = {
+      totalTokens,
+      basePromptTokens: totalBasePromptTokens,
+      contextTokens: totalContextTokens,
+      avgTokensPerQuestion: Math.round(totalTokens / allPromptTokens.length),
+      avgBasePromptTokens: allBasePromptTokens.length > 0
+        ? Math.round(totalBasePromptTokens / allBasePromptTokens.length)
+        : 0,
+      avgContextTokens: allContextTokens.length > 0
+        ? Math.round(totalContextTokens / allContextTokens.length)
+        : 0,
+    }
+  }
+
   const totalQuestions = evaluations.length
   const correctCount = evaluations.filter((e) => e.score === 1).length
   const accuracy = totalQuestions > 0 ? correctCount / totalQuestions : 0
@@ -210,6 +248,7 @@ export function generateReport(benchmark: Benchmark, checkpoint: RunCheckpoint):
       evaluate: calculateLatencyStats(evaluateDurations),
       total: calculateLatencyStats(totalDurations),
     },
+    tokens: tokenMetrics,
     retrieval: overallRetrieval,
     byQuestionType,
     questionTypeRegistry: benchmark.getQuestionTypes(),

@@ -162,7 +162,14 @@ export default function QuestionDetailPage() {
               : "border-status-error/30 bg-status-error/5"
           )}
         >
-          <h3 className="text-xs text-text-muted uppercase tracking-wide mb-2">Model Answer</h3>
+          <div className="flex items-center justify-between mb-2">
+            <h3 className="text-xs text-text-muted uppercase tracking-wide">Model Answer</h3>
+            {question.phases?.answer?.promptTokens && (
+              <span className="text-xs text-text-muted font-mono">
+                {question.phases.answer.promptTokens.toLocaleString()} tokens
+              </span>
+            )}
+          </div>
           <p
             className={cn(
               "font-medium break-words",
