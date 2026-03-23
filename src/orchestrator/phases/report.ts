@@ -186,7 +186,7 @@ export function generateReport(benchmark: Benchmark, checkpoint: RunCheckpoint):
 
   const overallRetrieval = aggregateRetrievalMetrics(allRetrievalMetrics)
 
-  // Aggregate token metrics
+  // Aggregate token metrics — only from evaluated questions (same population as quality/latency)
   let tokenMetrics: TokenMetrics | undefined
   const allPromptTokens: number[] = []
   const allBasePromptTokens: number[] = []
@@ -195,13 +195,13 @@ export function generateReport(benchmark: Benchmark, checkpoint: RunCheckpoint):
   for (const question of questions) {
     const qCheckpoint = checkpoint.questions[question.questionId]
     if (!qCheckpoint) continue
+    // Only consider questions that were evaluated (same filter as the quality/latency loop above)
+    if (qCheckpoint.phases.evaluate.status !== "completed") continue
     const answerPhase = qCheckpoint.phases.answer
-    if (answerPhase.status === "completed") {
-      if (answerPhase.promptTokens != null) allPromptTokens.push(answerPhase.promptTokens)
-      if (answerPhase.basePromptTokens != null)
-        allBasePromptTokens.push(answerPhase.basePromptTokens)
-      if (answerPhase.contextTokens != null) allContextTokens.push(answerPhase.contextTokens)
-    }
+    if (answerPhase.promptTokens != null) allPromptTokens.push(answerPhase.promptTokens)
+    if (answerPhase.basePromptTokens != null)
+      allBasePromptTokens.push(answerPhase.basePromptTokens)
+    if (answerPhase.contextTokens != null) allContextTokens.push(answerPhase.contextTokens)
   }
 
   if (allPromptTokens.length > 0) {
@@ -209,6 +209,8 @@ export function generateReport(benchmark: Benchmark, checkpoint: RunCheckpoint):
     const totalBasePromptTokens = allBasePromptTokens.reduce((a, b) => a + b, 0)
     const totalContextTokens = allContextTokens.reduce((a, b) => a + b, 0)
 
+    // Use the number of questions with token data as the denominator for averages.
+    // This is accurate because we already filtered to evaluated questions above.
     tokenMetrics = {
       totalTokens,
       basePromptTokens: totalBasePromptTokens,
@@ -233,7 +235,9 @@ export function generateReport(benchmark: Benchmark, checkpoint: RunCheckpoint):
 
   let memscore: string | undefined
   let memscoreComponents: { quality: number; latencyMs: number; contextTokens: number } | undefined
-  if (tokenMetrics) {
+  // Only emit MemScore when token data covers all evaluated questions,
+  // so quality, latency, and tokens are derived from the same population.
+  if (tokenMetrics && allPromptTokens.length === totalQuestions) {
     memscoreComponents = {
       quality: qualityPct,
       latencyMs: avgLatency,
