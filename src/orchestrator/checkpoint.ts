@@ -84,15 +84,29 @@ export class CheckpointManager {
 
     checkpoint.updatedAt = new Date().toISOString()
 
-    try {
-      writeFileSync(tempPath, JSON.stringify(checkpoint, null, 2))
-      renameSync(tempPath, path)
-    } catch (e) {
+    let lastError: any
+
+    // Windows often locks files briefly (EPERM/EBUSY), so we retry a few times
+    for (let attempt = 0; attempt < 5; attempt++) {
       try {
-        unlinkSync(tempPath)
-      } catch {}
-      throw e
+        writeFileSync(tempPath, JSON.stringify(checkpoint, null, 2))
+        renameSync(tempPath, path)
+        return // Success
+      } catch (e: any) {
+        lastError = e
+        if (e.code !== "EPERM" && e.code !== "EBUSY") {
+          break // Don't retry other errors
+        }
+        // Wait with exponential backoff: 50, 100, 200, 400, 800ms
+        await new Promise((resolve) => setTimeout(resolve, 50 * Math.pow(2, attempt)))
+      }
     }
+
+    // If we get here, all retries failed or it was a non-retriable error
+    try {
+      unlinkSync(tempPath)
+    } catch { }
+    throw lastError
   }
 
   async flush(runId?: string): Promise<void> {
@@ -270,12 +284,12 @@ export class CheckpointManager {
       evaluated: questions.filter((q) => q.phases.evaluate.status === "completed").length,
       ...(episodesTotal > 0
         ? {
-            indexingEpisodes: {
-              total: episodesTotal,
-              completed: episodesCompleted,
-              failed: episodesFailed,
-            },
-          }
+          indexingEpisodes: {
+            total: episodesTotal,
+            completed: episodesCompleted,
+            failed: episodesFailed,
+          },
+        }
         : {}),
     }
   }
