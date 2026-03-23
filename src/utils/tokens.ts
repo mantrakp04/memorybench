@@ -26,7 +26,15 @@ let _o200k: Tiktoken | null = null
 let _cl100k: Tiktoken | null = null
 
 function getEncoder(modelId: string): Tiktoken {
-  if (modelId.includes("gpt-4o") || modelId.includes("gpt-4.1") || modelId.includes("gpt-5")) {
+  // o200k_base: GPT-4o+, GPT-4.1, GPT-5, and reasoning models (o1, o3, o4)
+  if (
+    modelId.includes("gpt-4o") ||
+    modelId.includes("gpt-4.1") ||
+    modelId.includes("gpt-5") ||
+    modelId.startsWith("o1") ||
+    modelId.startsWith("o3") ||
+    modelId.startsWith("o4")
+  ) {
     return (_o200k ??= new Tiktoken(o200k_base))
   }
   return (_cl100k ??= new Tiktoken(cl100k_base))
