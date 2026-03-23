@@ -335,6 +335,13 @@ export default function RunDetailPage() {
       {/* Tab Content */}
       {activeTab === "overview" && (
         <div className="space-y-6">
+          {report?.memscore && (
+            <div className="card bg-accent/5 border-accent/20">
+              <div className="text-xs text-text-muted uppercase tracking-wide mb-1">MemScore</div>
+              <div className="text-2xl font-mono font-semibold text-accent">{report.memscore}</div>
+              <div className="text-xs text-text-secondary mt-1">quality / latency / tokens</div>
+            </div>
+          )}
           <StatsGrid
             cards={[
               {

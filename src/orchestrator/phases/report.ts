@@ -9,6 +9,7 @@ import type {
   QuestionTypeStats,
   RetrievalMetrics,
   RetrievalAggregates,
+  TokenMetrics,
 } from "../../types/unified"
 import { logger } from "../../utils/logger"
 
@@ -185,9 +186,65 @@ export function generateReport(benchmark: Benchmark, checkpoint: RunCheckpoint):
 
   const overallRetrieval = aggregateRetrievalMetrics(allRetrievalMetrics)
 
+  // Aggregate token metrics — only from evaluated questions (same population as quality/latency)
+  let tokenMetrics: TokenMetrics | undefined
+  const allPromptTokens: number[] = []
+  const allBasePromptTokens: number[] = []
+  const allContextTokens: number[] = []
+
+  for (const question of questions) {
+    const qCheckpoint = checkpoint.questions[question.questionId]
+    if (!qCheckpoint) continue
+    // Only consider questions that were evaluated (same filter as the quality/latency loop above)
+    if (qCheckpoint.phases.evaluate.status !== "completed") continue
+    const answerPhase = qCheckpoint.phases.answer
+    if (answerPhase.promptTokens != null) allPromptTokens.push(answerPhase.promptTokens)
+    if (answerPhase.basePromptTokens != null)
+      allBasePromptTokens.push(answerPhase.basePromptTokens)
+    if (answerPhase.contextTokens != null) allContextTokens.push(answerPhase.contextTokens)
+  }
+
+  if (allPromptTokens.length > 0) {
+    const totalTokens = allPromptTokens.reduce((a, b) => a + b, 0)
+    const totalBasePromptTokens = allBasePromptTokens.reduce((a, b) => a + b, 0)
+    const totalContextTokens = allContextTokens.reduce((a, b) => a + b, 0)
+
+    // Use the number of questions with token data as the denominator for averages.
+    // This is accurate because we already filtered to evaluated questions above.
+    tokenMetrics = {
+      totalTokens,
+      basePromptTokens: totalBasePromptTokens,
+      contextTokens: totalContextTokens,
+      avgTokensPerQuestion: Math.round(totalTokens / allPromptTokens.length),
+      avgBasePromptTokens:
+        allBasePromptTokens.length > 0
+          ? Math.round(totalBasePromptTokens / allBasePromptTokens.length)
+          : 0,
+      avgContextTokens:
+        allContextTokens.length > 0 ? Math.round(totalContextTokens / allContextTokens.length) : 0,
+    }
+  }
+
   const totalQuestions = evaluations.length
   const correctCount = evaluations.filter((e) => e.score === 1).length
   const accuracy = totalQuestions > 0 ? correctCount / totalQuestions : 0
+
+  const searchLatencyStats = calculateLatencyStats(searchDurations)
+  const qualityPct = Math.round(accuracy * 100)
+  const avgLatency = searchLatencyStats.mean
+
+  let memscore: string | undefined
+  let memscoreComponents: { quality: number; latencyMs: number; contextTokens: number } | undefined
+  // Only emit MemScore when token data covers all evaluated questions,
+  // so quality, latency, and tokens are derived from the same population.
+  if (tokenMetrics && allPromptTokens.length === totalQuestions) {
+    memscoreComponents = {
+      quality: qualityPct,
+      latencyMs: avgLatency,
+      contextTokens: tokenMetrics.avgContextTokens,
+    }
+    memscore = `${qualityPct}% / ${avgLatency}ms / ${tokenMetrics.avgContextTokens}tok`
+  }
 
   const result: BenchmarkResult = {
     provider: checkpoint.provider,
@@ -205,11 +262,14 @@ export function generateReport(benchmark: Benchmark, checkpoint: RunCheckpoint):
     latency: {
       ingest: calculateLatencyStats(ingestDurations),
       indexing: calculateLatencyStats(indexingDurations),
-      search: calculateLatencyStats(searchDurations),
+      search: searchLatencyStats,
       answer: calculateLatencyStats(answerDurations),
       evaluate: calculateLatencyStats(evaluateDurations),
       total: calculateLatencyStats(totalDurations),
     },
+    tokens: tokenMetrics,
+    memscore,
+    memscoreComponents,
     retrieval: overallRetrieval,
     byQuestionType,
     questionTypeRegistry: benchmark.getQuestionTypes(),
@@ -252,6 +312,20 @@ export function printReport(result: BenchmarkResult): void {
   console.log(`  Total Questions: ${result.summary.totalQuestions}`)
   console.log(`  Correct: ${result.summary.correctCount}`)
   console.log(`  Accuracy: ${(result.summary.accuracy * 100).toFixed(2)}%`)
+
+  if (result.memscore && result.tokens) {
+    const qualityPct = Math.round(result.summary.accuracy * 100)
+    const avgLatency = result.latency.search.mean
+    console.log("")
+    console.log(`  Quality:  ${qualityPct}%`)
+    console.log(`  Latency:  ${avgLatency}ms (avg)`)
+    console.log(
+      `  Tokens:   ${result.tokens.avgContextTokens.toLocaleString()} (avg context sent to answering model)`
+    )
+    console.log("")
+    console.log(`  MemScore: ${result.memscore}`)
+  }
+
   console.log("-".repeat(60))
   console.log("\nLATENCY (ms):")
   console.log("                    min     max    mean  median     p95     p99")

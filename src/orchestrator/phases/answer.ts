@@ -14,6 +14,7 @@ import { buildDefaultAnswerPrompt } from "../../prompts/defaults"
 import { buildContextString } from "../../types/prompts"
 import { ConcurrentExecutor } from "../concurrent"
 import { resolveConcurrency } from "../../types/concurrency"
+import { countTokens } from "../../utils/tokens"
 
 type LanguageModel =
   | ReturnType<typeof createOpenAI>
@@ -118,7 +119,15 @@ export async function runAnswerPhase(
         const context: unknown[] = searchData.results || []
         const questionDate = checkpoint.questions[question.questionId]?.questionDate
 
+        const basePrompt = buildAnswerPrompt(question.question, [], questionDate, provider)
         const prompt = buildAnswerPrompt(question.question, context, questionDate, provider)
+
+        const basePromptTokens = countTokens(basePrompt, modelConfig)
+        const promptTokens = countTokens(prompt, modelConfig)
+        // Derive contextTokens from the difference so it reflects the actual formatted
+        // context in the prompt (not the raw JSON), which matters for providers with
+        // custom prompt functions that transform context (e.g. Zep's XML-like tags).
+        const contextTokens = Math.max(0, promptTokens - basePromptTokens)
 
         const params: Record<string, unknown> = {
           model: client(modelConfig.id),
@@ -136,11 +145,18 @@ export async function runAnswerPhase(
         checkpointManager.updatePhase(checkpoint, question.questionId, "answer", {
           status: "completed",
           hypothesis: text.trim(),
+          promptTokens,
+          basePromptTokens,
+          contextTokens,
           completedAt: new Date().toISOString(),
           durationMs,
         })
 
-        logger.progress(index + 1, total, `Answered ${question.questionId} (${durationMs}ms)`)
+        logger.progress(
+          index + 1,
+          total,
+          `Answered ${question.questionId} (${durationMs}ms, ${promptTokens} tokens: ${basePromptTokens} base + ${contextTokens} context)`
+        )
         return { questionId: question.questionId, durationMs }
       } catch (e) {
         const error = e instanceof Error ? e.message : String(e)

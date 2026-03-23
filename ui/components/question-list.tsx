@@ -261,8 +261,13 @@ export function QuestionList({ runId, questions, questionTypeRegistry }: Questio
                         </div>
                       </div>
                       <div className="min-w-0">
-                        <div className="text-xs text-text-muted uppercase tracking-wide mb-1">
-                          Model Answer
+                        <div className="flex items-center justify-between text-xs text-text-muted uppercase tracking-wide mb-1">
+                          <span>Model Answer</span>
+                          {q.phases.answer.promptTokens != null && (
+                            <span className="font-mono normal-case">
+                              {q.phases.answer.promptTokens.toLocaleString()} tokens
+                            </span>
+                          )}
                         </div>
                         <div className="text-sm text-text-primary font-mono bg-bg-elevated p-2 rounded break-words">
                           {q.phases.answer.hypothesis || "—"}
