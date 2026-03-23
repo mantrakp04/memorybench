@@ -263,9 +263,9 @@ export function QuestionList({ runId, questions, questionTypeRegistry }: Questio
                       <div className="min-w-0">
                         <div className="flex items-center justify-between text-xs text-text-muted uppercase tracking-wide mb-1">
                           <span>Model Answer</span>
-                          {q.phases.answer.promptTokens && (
+                          {q.phases.answer.contextTokens && (
                             <span className="font-mono normal-case">
-                              {q.phases.answer.promptTokens.toLocaleString()} tokens
+                              {q.phases.answer.contextTokens.toLocaleString()} context tokens
                             </span>
                           )}
                         </div>
