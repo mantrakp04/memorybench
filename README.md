@@ -125,6 +125,40 @@ bun run src/index.ts show-failures -r my-test
 
 Each phase checkpoints independently. Failed runs resume from last successful point.
 
+## MemScore
+
+MemScore is a composite metric that captures three dimensions of provider performance in a single line:
+
+```
+accuracy% / latencyMs / contextTokens
+```
+
+| Component | What it measures |
+|-----------|-----------------|
+| **Quality** | Answer accuracy — `(correct / total) * 100` from judge evaluations |
+| **Latency** | Average search response time in milliseconds |
+| **Tokens** | Average context tokens sent to the answering model (counted client-side) |
+
+After a run completes, MemScore appears in the CLI summary:
+
+```
+Summary:
+  Total Questions: 50
+  Correct: 43
+  Accuracy: 86.00%
+  MemScore: 86% / 145ms / 1823tok
+```
+
+MemScore is intentionally a triple, not a single number — collapsing quality, latency, and cost into one score hides important tradeoffs. Use it to compare providers side-by-side on the same benchmark:
+
+```bash
+bun run src/index.ts compare -p supermemory,mem0,zep -b locomo -j gpt-4o
+```
+
+The `report.json` includes both a display string and structured `memscoreComponents` for programmatic use.
+
+> **[Full MemScore documentation →](https://supermemory.ai/docs/memorybench/memscore)**
+
 ## Checkpointing
 
 Runs persist to `data/runs/{runId}/`:
