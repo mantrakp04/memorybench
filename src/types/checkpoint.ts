@@ -55,6 +55,9 @@ export interface SearchPhaseCheckpoint {
 export interface AnswerPhaseCheckpoint {
   status: PhaseStatus
   hypothesis?: string
+  promptTokens?: number
+  basePromptTokens?: number
+  contextTokens?: number
   startedAt?: string
   completedAt?: string
   durationMs?: number

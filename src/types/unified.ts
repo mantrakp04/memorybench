@@ -91,6 +91,15 @@ export interface QuestionTypeStats {
   retrieval?: RetrievalAggregates
 }
 
+export interface TokenMetrics {
+  totalTokens: number
+  basePromptTokens: number
+  contextTokens: number
+  avgTokensPerQuestion: number
+  avgBasePromptTokens: number
+  avgContextTokens: number
+}
+
 export interface BenchmarkResult {
   provider: string
   benchmark: string
@@ -112,6 +121,8 @@ export interface BenchmarkResult {
     evaluate: LatencyStats
     total: LatencyStats
   }
+  tokens?: TokenMetrics
+  memscore?: string
   retrieval?: RetrievalAggregates
   byQuestionType: Record<string, QuestionTypeStats>
   questionTypeRegistry?: QuestionTypeRegistry
