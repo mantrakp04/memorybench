@@ -5,6 +5,7 @@ import type { BenchmarkResult } from "../types/unified"
 import { orchestrator, CheckpointManager } from "./index"
 import { createBenchmark } from "../benchmarks"
 import { logger } from "../utils/logger"
+import { validateQuestionIds } from "../utils/question-ids"
 import { existsSync, mkdirSync, readFileSync, writeFileSync, rmSync } from "fs"
 import { join } from "path"
 import { startRun, endRun } from "../server/runState"
@@ -157,35 +158,8 @@ export class BatchManager {
 
     let targetQuestionIds: string[]
     if (questionIds && questionIds.length > 0) {
-      // Validate that all provided IDs exist in the benchmark
-      const allQuestionIdsSet = new Set(allQuestions.map((q) => q.questionId))
-      const validIds: string[] = []
-      const invalidIds: string[] = []
-
-      for (const id of questionIds) {
-        if (allQuestionIdsSet.has(id)) {
-          validIds.push(id)
-        } else {
-          invalidIds.push(id)
-        }
-      }
-
-      if (invalidIds.length > 0) {
-        logger.warn(`Invalid question IDs (will be skipped): ${invalidIds.join(", ")}`)
-      }
-
-      if (validIds.length === 0) {
-        throw new Error(
-          `All provided questionIds are invalid. No matching questions found in benchmark "${benchmark}". ` +
-            `Invalid IDs: ${invalidIds.join(", ")}`
-        )
-      }
-
+      const { validIds } = validateQuestionIds(questionIds, allQuestions, benchmark)
       targetQuestionIds = validIds
-      logger.info(
-        `Using explicit questionIds: ${validIds.length} valid questions` +
-          (invalidIds.length > 0 ? ` (${invalidIds.length} invalid skipped)` : "")
-      )
     } else if (sampling) {
       targetQuestionIds = selectQuestionsBySampling(allQuestions, sampling)
     } else {
