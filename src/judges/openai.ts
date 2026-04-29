@@ -5,6 +5,7 @@ import type { ProviderPrompts } from "../types/prompts"
 import { buildJudgePrompt, parseJudgeResponse, getJudgePrompt } from "./base"
 import { logger } from "../utils/logger"
 import { getModelConfig, ModelConfig, DEFAULT_JUDGE_MODELS } from "../utils/models"
+import { config as benchConfig } from "../utils/config"
 
 export class OpenAIJudge implements Judge {
   name = "openai"
@@ -14,6 +15,12 @@ export class OpenAIJudge implements Judge {
   async initialize(config: JudgeConfig): Promise<void> {
     this.client = createOpenAI({
       apiKey: config.apiKey,
+      baseURL: benchConfig.openaiBaseUrl,
+      headers: {
+        "HTTP-Referer": "https://github.com/mantrakp04/g-spot",
+        "X-Title": "g-spot MemoryBench",
+      },
+      fetch: createOpenRouterFetch(),
     })
     const modelAlias = config.model || DEFAULT_JUDGE_MODELS.openai
     this.modelConfig = getModelConfig(modelAlias)
@@ -28,7 +35,9 @@ export class OpenAIJudge implements Judge {
     const prompt = buildJudgePrompt(input)
 
     const params: Record<string, unknown> = {
-      model: this.client(this.modelConfig.id),
+      model: benchConfig.openaiBaseUrl?.includes("openrouter.ai")
+        ? this.client.chat(this.modelConfig.id)
+        : this.client(this.modelConfig.id),
       prompt,
     }
 
@@ -49,8 +58,35 @@ export class OpenAIJudge implements Judge {
 
   getModel() {
     if (!this.client || !this.modelConfig) throw new Error("Judge not initialized")
+    if (benchConfig.openaiBaseUrl?.includes("openrouter.ai")) {
+      return this.client.chat(this.modelConfig.id)
+    }
     return this.client(this.modelConfig.id)
   }
+}
+
+type OpenAIFetch = NonNullable<Parameters<typeof createOpenAI>[0]>["fetch"]
+
+function createOpenRouterFetch(): OpenAIFetch {
+  return (async (input: Parameters<typeof fetch>[0], init?: Parameters<typeof fetch>[1]) => {
+    if (!benchConfig.openaiBaseUrl?.includes("openrouter.ai") || typeof init?.body !== "string") {
+      return fetch(input, init)
+    }
+
+    const body = JSON.parse(init.body) as Record<string, unknown>
+    body.provider = {
+      only: benchConfig.openaiProviderRoute ? [benchConfig.openaiProviderRoute] : undefined,
+      quantizations: benchConfig.openaiProviderQuantization
+        ? [benchConfig.openaiProviderQuantization]
+        : undefined,
+      allow_fallbacks: false,
+    }
+
+    return fetch(input, {
+      ...init,
+      body: JSON.stringify(body),
+    })
+  }) as OpenAIFetch
 }
 
 export default OpenAIJudge

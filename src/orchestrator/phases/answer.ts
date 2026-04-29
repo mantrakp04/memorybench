@@ -30,7 +30,15 @@ function getAnsweringModel(modelAlias: string): {
   switch (modelConfig.provider) {
     case "openai":
       return {
-        client: createOpenAI({ apiKey: config.openaiApiKey }),
+        client: createOpenAI({
+          apiKey: config.openaiApiKey,
+          baseURL: config.openaiBaseUrl,
+          headers: {
+            "HTTP-Referer": "https://github.com/mantrakp04/g-spot",
+            "X-Title": "g-spot MemoryBench",
+          },
+          fetch: createOpenRouterFetch(),
+        }),
         modelConfig,
       }
     case "anthropic":
@@ -44,6 +52,30 @@ function getAnsweringModel(modelAlias: string): {
         modelConfig,
       }
   }
+}
+
+type OpenAIFetch = NonNullable<Parameters<typeof createOpenAI>[0]>["fetch"]
+
+function createOpenRouterFetch(): OpenAIFetch {
+  return (async (input: Parameters<typeof fetch>[0], init?: Parameters<typeof fetch>[1]) => {
+    if (!config.openaiBaseUrl?.includes("openrouter.ai") || typeof init?.body !== "string") {
+      return fetch(input, init)
+    }
+
+    const body = JSON.parse(init.body) as Record<string, unknown>
+    body.provider = {
+      only: config.openaiProviderRoute ? [config.openaiProviderRoute] : undefined,
+      quantizations: config.openaiProviderQuantization
+        ? [config.openaiProviderQuantization]
+        : undefined,
+      allow_fallbacks: false,
+    }
+
+    return fetch(input, {
+      ...init,
+      body: JSON.stringify(body),
+    })
+  }) as OpenAIFetch
 }
 
 function buildAnswerPrompt(
@@ -65,6 +97,14 @@ function buildAnswerPrompt(
   }
 
   return buildDefaultAnswerPrompt(question, context, questionDate)
+}
+
+function createLanguageModel(client: LanguageModel, modelConfig: ModelConfig) {
+  if (modelConfig.provider === "openai" && config.openaiBaseUrl?.includes("openrouter.ai")) {
+    return (client as ReturnType<typeof createOpenAI>).chat(modelConfig.id)
+  }
+
+  return client(modelConfig.id)
 }
 
 export async function runAnswerPhase(
@@ -130,7 +170,7 @@ export async function runAnswerPhase(
         const contextTokens = Math.max(0, promptTokens - basePromptTokens)
 
         const params: Record<string, unknown> = {
-          model: client(modelConfig.id),
+          model: createLanguageModel(client, modelConfig),
           prompt,
           maxTokens: modelConfig.defaultMaxTokens,
         }

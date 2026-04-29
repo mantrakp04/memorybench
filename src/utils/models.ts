@@ -9,6 +9,15 @@ export interface ModelConfig {
 }
 
 export const MODEL_CONFIGS: Record<string, ModelConfig> = {
+  "openrouter-deepseek-v4-pro": {
+    id: "deepseek/deepseek-v4-pro",
+    provider: "openai",
+    displayName: "OpenRouter DeepSeek V4 Pro (gmicloud/fp8)",
+    supportsTemperature: false,
+    defaultTemperature: 1,
+    maxTokensParam: "maxTokens",
+    defaultMaxTokens: 1000,
+  },
   // OpenAI - Standard models (support temperature)
   "gpt-4o": {
     id: "gpt-4o",

@@ -1,35 +1,29 @@
 export interface Config {
-  supermemoryApiKey: string
-  supermemoryBaseUrl: string
-  mem0ApiKey: string
-  zepApiKey: string
   openaiApiKey: string
+  openaiBaseUrl?: string
+  openaiProviderRoute?: string
+  openaiProviderQuantization?: string
   anthropicApiKey: string
   googleApiKey: string
 }
 
+const openrouterBaseUrl = process.env.OPENROUTER_API_KEY
+  ? "https://openrouter.ai/api/v1"
+  : undefined
+
 export const config: Config = {
-  supermemoryApiKey: process.env.SUPERMEMORY_API_KEY || "",
-  supermemoryBaseUrl: process.env.SUPERMEMORY_BASE_URL || "https://api.supermemory.ai",
-  mem0ApiKey: process.env.MEM0_API_KEY || "",
-  zepApiKey: process.env.ZEP_API_KEY || "",
-  openaiApiKey: process.env.OPENAI_API_KEY || "",
+  openaiApiKey: process.env.OPENROUTER_API_KEY || process.env.OPENAI_API_KEY || "",
+  openaiBaseUrl: process.env.OPENROUTER_BASE_URL || process.env.OPENAI_BASE_URL || openrouterBaseUrl,
+  openaiProviderRoute: process.env.OPENROUTER_PROVIDER || "gmicloud",
+  openaiProviderQuantization: process.env.OPENROUTER_QUANTIZATION || "fp8",
   anthropicApiKey: process.env.ANTHROPIC_API_KEY || "",
   googleApiKey: process.env.GOOGLE_API_KEY || "",
 }
 
 export function getProviderConfig(provider: string): { apiKey: string; baseUrl?: string } {
   switch (provider) {
-    case "supermemory":
-      return { apiKey: config.supermemoryApiKey, baseUrl: config.supermemoryBaseUrl }
-    case "mem0":
-      return { apiKey: config.mem0ApiKey }
-    case "zep":
-      return { apiKey: config.zepApiKey }
-    case "filesystem":
-      return { apiKey: config.openaiApiKey } // Filesystem uses OpenAI for memory extraction
-    case "rag":
-      return { apiKey: config.openaiApiKey } // RAG provider uses OpenAI for embeddings
+    case "gspot":
+      return { apiKey: "local" }
     default:
       throw new Error(`Unknown provider: ${provider}`)
   }
