@@ -47,4 +47,4 @@ export interface Provider {
   clear(containerTag: string): Promise<void>
 }
 
-export type ProviderName = "gspot"
+export type ProviderName = "gspot" | "supermemory"

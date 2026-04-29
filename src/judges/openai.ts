@@ -47,7 +47,9 @@ export class OpenAIJudge implements Judge {
 
     params.maxTokens = this.modelConfig.defaultMaxTokens
 
-    const { text } = await generateText(params as Parameters<typeof generateText>[0])
+    const { text } = await this.generateTextWithRetries(
+      params as Parameters<typeof generateText>[0]
+    )
 
     return parseJudgeResponse(text)
   }
@@ -63,6 +65,26 @@ export class OpenAIJudge implements Judge {
     }
     return this.client(this.modelConfig.id)
   }
+
+  private async generateTextWithRetries(params: Parameters<typeof generateText>[0], attempts = 8) {
+    let lastError: unknown
+
+    for (let attempt = 1; attempt <= attempts; attempt++) {
+      try {
+        return await generateText(params)
+      } catch (error) {
+        lastError = error
+        const message = error instanceof Error ? error.message : String(error)
+        if (!benchConfig.openaiBaseUrl?.includes("openrouter.ai") || attempt === attempts) {
+          throw error
+        }
+        logger.warn(`OpenRouter judge request failed (${attempt}/${attempts}): ${message}`)
+        await new Promise((resolve) => setTimeout(resolve, 1000 * attempt))
+      }
+    }
+
+    throw lastError
+  }
 }
 
 type OpenAIFetch = NonNullable<Parameters<typeof createOpenAI>[0]>["fetch"]
@@ -73,13 +95,16 @@ function createOpenRouterFetch(): OpenAIFetch {
       return fetch(input, init)
     }
 
+    if (!benchConfig.openaiProviderRoute && !benchConfig.openaiProviderQuantization) {
+      return fetch(input, init)
+    }
+
     const body = JSON.parse(init.body) as Record<string, unknown>
     body.provider = {
-      only: benchConfig.openaiProviderRoute ? [benchConfig.openaiProviderRoute] : undefined,
-      quantizations: benchConfig.openaiProviderQuantization
-        ? [benchConfig.openaiProviderQuantization]
-        : undefined,
-      allow_fallbacks: false,
+      ...(benchConfig.openaiProviderRoute ? { only: [benchConfig.openaiProviderRoute] } : {}),
+      ...(benchConfig.openaiProviderQuantization
+        ? { quantizations: [benchConfig.openaiProviderQuantization] }
+        : {}),
     }
 
     return fetch(input, {

@@ -62,13 +62,16 @@ function createOpenRouterFetch(): OpenAIFetch {
       return fetch(input, init)
     }
 
+    if (!config.openaiProviderRoute && !config.openaiProviderQuantization) {
+      return fetch(input, init)
+    }
+
     const body = JSON.parse(init.body) as Record<string, unknown>
     body.provider = {
-      only: config.openaiProviderRoute ? [config.openaiProviderRoute] : undefined,
-      quantizations: config.openaiProviderQuantization
-        ? [config.openaiProviderQuantization]
-        : undefined,
-      allow_fallbacks: false,
+      ...(config.openaiProviderRoute ? { only: [config.openaiProviderRoute] } : {}),
+      ...(config.openaiProviderQuantization
+        ? { quantizations: [config.openaiProviderQuantization] }
+        : {}),
     }
 
     return fetch(input, {
@@ -105,6 +108,29 @@ function createLanguageModel(client: LanguageModel, modelConfig: ModelConfig) {
   }
 
   return client(modelConfig.id)
+}
+
+async function generateTextWithRetries(
+  params: Parameters<typeof generateText>[0],
+  attempts = 8
+) {
+  let lastError: unknown
+
+  for (let attempt = 1; attempt <= attempts; attempt++) {
+    try {
+      return await generateText(params)
+    } catch (error) {
+      lastError = error
+      const message = error instanceof Error ? error.message : String(error)
+      if (!config.openaiBaseUrl?.includes("openrouter.ai") || attempt === attempts) {
+        throw error
+      }
+      logger.warn(`OpenRouter answer request failed (${attempt}/${attempts}): ${message}`)
+      await new Promise((resolve) => setTimeout(resolve, 1000 * attempt))
+    }
+  }
+
+  throw lastError
 }
 
 export async function runAnswerPhase(
@@ -179,7 +205,9 @@ export async function runAnswerPhase(
           params.temperature = modelConfig.defaultTemperature
         }
 
-        const { text } = await generateText(params as Parameters<typeof generateText>[0])
+        const { text } = await generateTextWithRetries(
+          params as Parameters<typeof generateText>[0]
+        )
 
         const durationMs = Date.now() - startTime
         checkpointManager.updatePhase(checkpoint, question.questionId, "answer", {

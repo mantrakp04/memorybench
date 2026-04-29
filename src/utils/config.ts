@@ -1,4 +1,6 @@
 export interface Config {
+  supermemoryApiKey: string
+  supermemoryBaseUrl: string
   openaiApiKey: string
   openaiBaseUrl?: string
   openaiProviderRoute?: string
@@ -12,10 +14,12 @@ const openrouterBaseUrl = process.env.OPENROUTER_API_KEY
   : undefined
 
 export const config: Config = {
+  supermemoryApiKey: process.env.SUPERMEMORY_API_KEY || "",
+  supermemoryBaseUrl: process.env.SUPERMEMORY_BASE_URL || "https://api.supermemory.ai",
   openaiApiKey: process.env.OPENROUTER_API_KEY || process.env.OPENAI_API_KEY || "",
   openaiBaseUrl: process.env.OPENROUTER_BASE_URL || process.env.OPENAI_BASE_URL || openrouterBaseUrl,
-  openaiProviderRoute: process.env.OPENROUTER_PROVIDER || "gmicloud",
-  openaiProviderQuantization: process.env.OPENROUTER_QUANTIZATION || "fp8",
+  openaiProviderRoute: process.env.OPENROUTER_PROVIDER,
+  openaiProviderQuantization: process.env.OPENROUTER_QUANTIZATION,
   anthropicApiKey: process.env.ANTHROPIC_API_KEY || "",
   googleApiKey: process.env.GOOGLE_API_KEY || "",
 }
@@ -24,6 +28,8 @@ export function getProviderConfig(provider: string): { apiKey: string; baseUrl?:
   switch (provider) {
     case "gspot":
       return { apiKey: "local" }
+    case "supermemory":
+      return { apiKey: config.supermemoryApiKey, baseUrl: config.supermemoryBaseUrl }
     default:
       throw new Error(`Unknown provider: ${provider}`)
   }

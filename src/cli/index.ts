@@ -58,8 +58,12 @@ Available providers for storing and retrieving memories:
   gspot          g-spot local memory graph/vector provider
                  Uses one local SQLite memory DB per MemoryBench containerTag
 
+  supermemory    Supermemory.ai - Cloud-based memory layer
+                 Requires: SUPERMEMORY_API_KEY
+
 Usage:
   -p gspot          Use g-spot local memory
+  -p supermemory    Use Supermemory
 `)
 }
 

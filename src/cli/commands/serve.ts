@@ -1,7 +1,7 @@
 import { startServer } from "../../server"
 
 function parseArgs(args: string[]): { port: number; open: boolean } {
-  let port = 3001
+  let port = 3009
   let open = true
 
   for (let i = 0; i < args.length; i++) {

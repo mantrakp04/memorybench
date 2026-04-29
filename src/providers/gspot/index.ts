@@ -1,4 +1,4 @@
-import { mkdir, rm } from "node:fs/promises"
+import { appendFile, mkdir, readFile, rm, writeFile } from "node:fs/promises"
 import { dirname, resolve } from "node:path"
 import { fileURLToPath } from "node:url"
 
@@ -21,6 +21,33 @@ const helperPath = resolve(providerDir, "worker.ts")
 interface WorkerResult {
   documentIds?: string[]
   results?: unknown[]
+}
+
+function sanitize(input: string): string {
+  return input.replace(/[^a-zA-Z0-9_.-]/g, "_")
+}
+
+function providerDataDir(): string {
+  return resolve(repoRoot, "packages/benchmarks/memorybench/data/providers/gspot")
+}
+
+function sessionsPath(containerTag: string): string {
+  return resolve(providerDataDir(), `${sanitize(containerTag)}.sessions.jsonl`)
+}
+
+async function readBufferedSessions(containerTag: string): Promise<UnifiedSession[]> {
+  const raw = await readFile(sessionsPath(containerTag), "utf8").catch(() => "")
+  const sessions = raw
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .map((line) => JSON.parse(line) as UnifiedSession)
+
+  const byId = new Map<string, UnifiedSession>()
+  for (const session of sessions) {
+    byId.set(session.sessionId, session)
+  }
+  return Array.from(byId.values())
 }
 
 function parseWorkerJson(stdout: string): WorkerResult {
@@ -74,29 +101,38 @@ export class GSpotProvider implements Provider {
     ingest: 1,
     indexing: 1,
     search: 1,
+    answer: 8,
+    evaluate: 8,
   }
 
   async initialize(_config: ProviderConfig): Promise<void> {
-    await mkdir(resolve(repoRoot, "packages/benchmarks/memorybench/data/providers/gspot"), {
-      recursive: true,
-    })
+    await mkdir(providerDataDir(), { recursive: true })
     logger.info("Initialized g-spot local memory provider")
   }
 
   async ingest(sessions: UnifiedSession[], options: IngestOptions): Promise<IngestResult> {
-    const result = await runWorker("ingest", {
-      containerTag: options.containerTag,
-      sessions,
-    })
+    if (sessions.length > 0) {
+      await appendFile(
+        sessionsPath(options.containerTag),
+        `${sessions.map((session) => JSON.stringify(session)).join("\n")}\n`
+      )
+    }
 
-    return { documentIds: result.documentIds ?? [] }
+    return { documentIds: sessions.map((session) => session.sessionId) }
   }
 
   async awaitIndexing(
     result: IngestResult,
-    _containerTag: string,
+    containerTag: string,
     onProgress?: IndexingProgressCallback
   ): Promise<void> {
+    const sessions = await readBufferedSessions(containerTag)
+    await runWorker("ingest", {
+      containerTag,
+      sessions,
+    })
+    await writeFile(sessionsPath(containerTag), "")
+
     onProgress?.({
       completedIds: result.documentIds,
       failedIds: [],
@@ -108,8 +144,8 @@ export class GSpotProvider implements Provider {
     const result = await runWorker("search", {
       containerTag: options.containerTag,
       query,
-      limit: options.limit ?? 10,
-      threshold: options.threshold ?? 0.3,
+      limit: Math.max(options.limit ?? 10, 20),
+      threshold: Math.min(options.threshold ?? 0.3, 0.2),
     })
 
     return result.results ?? []
@@ -117,6 +153,7 @@ export class GSpotProvider implements Provider {
 
   async clear(containerTag: string): Promise<void> {
     await runWorker("clear", { containerTag })
+    await rm(sessionsPath(containerTag), { force: true })
   }
 }
 

@@ -1,9 +1,11 @@
 import type { Provider, ProviderName } from "../types/provider"
 import type { ConcurrencyConfig } from "../types/concurrency"
 import { GSpotProvider } from "./gspot"
+import { SupermemoryProvider } from "./supermemory"
 
 const providers: Record<ProviderName, new () => Provider> = {
   gspot: GSpotProvider,
+  supermemory: SupermemoryProvider,
 }
 
 export function createProvider(name: ProviderName): Provider {
@@ -31,4 +33,4 @@ export function getProviderInfo(name: ProviderName): {
   }
 }
 
-export { GSpotProvider }
+export { GSpotProvider, SupermemoryProvider }

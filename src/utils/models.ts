@@ -12,7 +12,7 @@ export const MODEL_CONFIGS: Record<string, ModelConfig> = {
   "openrouter-deepseek-v4-pro": {
     id: "deepseek/deepseek-v4-pro",
     provider: "openai",
-    displayName: "OpenRouter DeepSeek V4 Pro (gmicloud/fp8)",
+    displayName: "OpenRouter DeepSeek V4 Pro",
     supportsTemperature: false,
     defaultTemperature: 1,
     maxTokensParam: "maxTokens",
